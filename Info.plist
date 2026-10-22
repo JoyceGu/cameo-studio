@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Cameo Studio</string>
+	<key>CFBundleExecutable</key>
+	<string>CameoStudio</string>
+	<key>CFBundleIconFile</key>
+	<string>CameoStudio.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>local.joyce.CameoStudio</string>
+	<key>CFBundleName</key>
+	<string>Cameo Studio</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.3.0</string>
+	<key>CFBundleVersion</key>
+	<string>4</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>NSCameraUsageDescription</key>
+	<string>将你的摄像头画面合成到讲解视频中，所有处理在本机完成。</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>录制你的讲解声音，并同步保存到 MP4。</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>录制你选择的屏幕或窗口，用于制作演示视频。</string>
+</dict>
+</plist>
