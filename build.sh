@@ -12,6 +12,7 @@ xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx15.0 \
   -framework AppKit -framework AVFoundation -framework ScreenCaptureKit -framework CoreImage -framework UniformTypeIdentifiers -framework Vision
 cp "$ROOT/Assets/TDCapture.icns" "$STAGE/Contents/Resources/TDCapture.icns"
 cp "$ROOT/Assets/Backgrounds/"*.png "$STAGE/Contents/Resources/"
+cp -R "$ROOT/Resources/Localizations" "$STAGE/Contents/Resources/Localizations"
 cp "$ROOT/Info.plist" "$STAGE/Contents/Info.plist"
 codesign --force --sign - --identifier local.joyce.CameoStudio "$STAGE"
 codesign --verify --deep --strict "$STAGE"

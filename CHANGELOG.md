@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Add a persistent script library with multiple notes, title editing and legacy-script migration.
+- Add TXT/Markdown file import and drag-and-drop, including UTF-8 and UTF-16 support.
+- Bundle a local stdio MCP server with create/list/get/update/open/status tools and copyable configuration.
+- Queue script activation while recording, exporting, scrolling or typing; preserve local edits on revision conflicts.
+- Use English source strings, comments and filenames; move Chinese UI text into localization resources.
+- Add protocol, persistence, concurrency and import validation tests.
+
 ## 0.3.1
 
 - Rename the app to TD Capture across the interface, menus, exports, app bundle, assets and documentation.

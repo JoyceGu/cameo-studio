@@ -6,12 +6,14 @@ A native macOS recorder that combines your screen, camera and microphone into on
 
 **Apple Silicon · macOS 15+ · English / 简体中文 · Local processing**
 
-[Download the latest release](https://github.com/JoyceGu/td-capture/releases/latest) · [中文使用说明](使用说明.md)
+[Download the latest release](https://github.com/JoyceGu/td-capture/releases/latest) · [中文使用说明](USER_GUIDE.zh-CN.md)
 
 ## Features
 
 - Record a display or an individual window, including browser and desktop apps.
 - Composite your camera into the recording as a circle or rounded rectangle; adjust size, position and mirroring.
+- Organize multiple scripts in a local library; import or drag in TXT/Markdown files.
+- Let a local MCP-capable AI client create, update and open scripts without interrupting a recording. See [MCP setup](Docs/MCP.md).
 - Read an editable, scrolling teleprompter with adjustable text size and speed. Pause scrolling or return to the top; scripts save locally.
 - Keep the recorder controls, teleprompter and camera preview out of screen capture; the camera is added separately to the exported video.
 - Choose the original camera background, adjustable background blur, or one of three image presets: Bright study, Soft nature and Soft watercolor.
@@ -20,7 +22,7 @@ A native macOS recorder that combines your screen, camera and microphone into on
 
 ## Install
 
-Download `TD-Capture-0.3.1-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/td-capture/releases), extract it and open **TD Capture.app**.
+Download `TD-Capture-0.4.0-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/td-capture/releases), extract it and open **TD Capture.app**.
 
 This is an early local prototype. The prebuilt app is ad hoc signed, **not Developer ID signed or notarized**, so macOS may prevent opening an Internet-downloaded copy. Building from source on your Mac is the alternative; the release is not an App Store distribution.
 
@@ -48,6 +50,10 @@ The script uses system Swift and frameworks only; there are no third-party depen
 
 Use **Settings → Interface language** (⌘,) to switch languages. Permission settings are managed by macOS in System Settings → Privacy & Security.
 
+## Scripts from AI clients
+
+Open **Script library → Copy MCP configuration** and add the copied command to an AI client supporting local stdio MCP. The app does not modify client settings automatically. The tools can create/list/read/update notes, queue an open request and check its status; they never start recording. Setup, examples and limits: [Docs/MCP.md](Docs/MCP.md).
+
 ## Current limits
 
 - Maximum output bounding box: 1920 × 1080, preserving the source aspect ratio; target screen rate: 30 fps.
@@ -59,7 +65,7 @@ Use **Settings → Interface language** (⌘,) to switch languages. Permission s
 
 ## Privacy
 
-Camera, microphone, screen capture, background segmentation, encoding and settings storage run locally. The app has no upload or telemetry feature. Scripts and preferences are saved with macOS UserDefaults. The watercolor icon and preset background images were generated with ImageGen; the prompts are included under `Assets/`.
+Camera, microphone, screen capture, background segmentation, encoding and settings storage run locally. The app has no upload or telemetry feature. Scripts are saved as local JSON documents under Application Support; preferences and an active-script compatibility/recovery backup use macOS UserDefaults. Configured MCP clients can read scripts through explicit tools; TD Capture itself does not upload them. The watercolor icon and preset background images were generated with ImageGen; the prompts are included under `Assets/`.
 
 The application keeps its original internal bundle identifier for upgrade compatibility, preserving existing scripts and preferences. The displayed product name and executable are TD Capture.
 
@@ -67,6 +73,10 @@ The application keeps its original internal bundle identifier for upgrade compat
 
 - `Sources/main.swift`: AppKit UI, language settings, camera/screen capture, teleprompter, compositor and MP4 writer.
 - `Sources/Background.swift`: local person segmentation, background compositing and preset controls.
+- `Sources/NoteStore.swift`: atomic note storage, revision checks, imports and persistent open requests.
+- `Sources/NotesLibrary.swift`: script library, import UI and safe teleprompter handoff.
+- `Sources/MCPServer.swift`: bundled local stdio MCP tool server.
+- `Sources/Localization.swift` and `Resources/Localizations/`: English source strings with Chinese localization resources.
 - `Info.plist`: application identity and camera/microphone permission descriptions.
 - `Assets/`: app icon, bundled backgrounds and generation notes.
 
@@ -76,4 +86,6 @@ Verified on the development Mac: native build and signature validation; H.264/AA
 
 TD Capture 可以同步录制屏幕、摄像头和麦克风，并合成为一个 MP4。附带不入镜的提词器、中英文切换、背景模糊和三张背景预选。所有处理在本机完成。
 
-首次使用请允许屏幕录制、摄像头和麦克风权限，建议先录十秒样片。当前仅支持 Apple Silicon Mac / macOS 15+；发布包尚未经过 Apple 公证，也可通过 `./build.sh` 在本机编译。详细操作见[使用说明](使用说明.md)。
+首次使用请允许屏幕录制、摄像头和麦克风权限，建议先录十秒样片。当前仅支持 Apple Silicon Mac / macOS 15+；发布包尚未经过 Apple 公证，也可通过 `./build.sh` 在本机编译。详细操作见[使用说明](USER_GUIDE.zh-CN.md)。
+
+Code identifiers, comments, source strings and executable/script filenames are in English. Chinese interface text is maintained in localization resources. Protocol/storage tests: `python3 Tests/test_notes_mcp.py`; import tests: see [MCP development checks](Docs/MCP.md#development-checks).

@@ -8,9 +8,9 @@ struct BackgroundPreset {
     let file: String
 }
 let backgroundPresets = [
-    BackgroundPreset(name: "明亮书房", file: "background-study"),
-    BackgroundPreset(name: "柔和自然", file: "background-nature"),
-    BackgroundPreset(name: "简洁水彩", file: "background-watercolor")
+    BackgroundPreset(name: "Bright study", file: "background-study"),
+    BackgroundPreset(name: "Soft nature", file: "background-nature"),
+    BackgroundPreset(name: "Soft watercolor", file: "background-watercolor")
 ]
 struct BackgroundSettings: Sendable {
     var mode: Int = 0 // original, blur, image
@@ -79,14 +79,14 @@ final class BackgroundProcessor {
         do {
             // The request and rendering use the same upright image coordinates.
             try VNImageRequestHandler(ciImage: image, orientation: .up, options: [:]).perform([request])
-            guard let observation = request.results?.first else { throw StudioError(message: "暂时无法识别人像，已隐藏原始背景。") }
-            if settings.mode == 2 && replacement == nil { throw StudioError(message: "背景图片无法载入，已隐藏原始背景。") }
+            guard let observation = request.results?.first else { throw StudioError(message: "Person detection is unavailable. The original background is hidden.") }
+            if settings.mode == 2 && replacement == nil { throw StudioError(message: "Background image unavailable. The original background is hidden.") }
             let mask = CIImage(cvPixelBuffer: observation.pixelBuffer)
             return (Self.blend(image, mask: mask, settings: settings, replacement: replacement), nil)
         } catch {
             // Never expose the untreated room when an effect is selected but fails.
             let safe = replacement.map { Self.fit($0, to: image.extent) } ?? CIImage(color: CIColor(red: 0.87, green: 0.9, blue: 0.94)).cropped(to: image.extent)
-            return (safe, "背景处理暂不可用，已隐藏原始画面。请切回原始背景或重试。")
+            return (safe, "Background processing unavailable. The original picture is hidden. Choose Original background or try again.")
         }
     }
 }
@@ -136,12 +136,12 @@ final class BackgroundPanel: NSObject {
         applyLanguage()
     }
     func applyLanguage() {
-        panel.title = L("摄像头背景")
-        heading.stringValue = L("选择人像背景")
-        mode.removeAllItems(); mode.addItems(withTitles: [L("原始背景"), L("模糊背景"), L("图片背景")]); mode.selectItem(at: settings.mode)
-        strengthLabel.stringValue = L("模糊强度")
+        panel.title = L("Camera background")
+        heading.stringValue = L("Choose your camera background")
+        mode.removeAllItems(); mode.addItems(withTitles: [L("Original background"), L("Blur background"), L("Image background")]); mode.selectItem(at: settings.mode)
+        strengthLabel.stringValue = L("Blur strength")
         for (i, b) in buttons.enumerated() { b.title = L(backgroundPresets[i].name) }
-        note.stringValue = L("效果会同步用于预览和成片。在本机处理；头发、手指和快速移动的边缘可能不够精确。")
+        note.stringValue = L("Effects appear in the preview and recording. Processed on your Mac; hair, fingers and fast movement may have imperfect edges.")
         refresh()
     }
     func refresh() {
