@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Rename the app to TD Capture across the interface, menus, exports, app bundle, assets and documentation.
+- Rename the GitHub repository to `JoyceGu/td-capture`.
+- Preserve the existing application identifier so saved scripts and preferences continue working.
+
 ## 0.3.0
 
 Initial public release.

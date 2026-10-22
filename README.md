@@ -1,12 +1,12 @@
-<p align="center"><img src="Assets/CameoStudio-watercolor.png" width="128" alt="Cameo Studio watercolor icon"></p>
+<p align="center"><img src="Assets/TDCapture-watercolor.png" width="128" alt="TD Capture watercolor icon"></p>
 
-# Cameo Studio
+# TD Capture
 
 A native macOS recorder that combines your screen, camera and microphone into one MP4, with a floating teleprompter that stays out of the recording.
 
 **Apple Silicon · macOS 15+ · English / 简体中文 · Local processing**
 
-[Download the latest release](https://github.com/JoyceGu/cameo-studio/releases/latest) · [中文使用说明](使用说明.md)
+[Download the latest release](https://github.com/JoyceGu/td-capture/releases/latest) · [中文使用说明](使用说明.md)
 
 ## Features
 
@@ -20,7 +20,7 @@ A native macOS recorder that combines your screen, camera and microphone into on
 
 ## Install
 
-Download `Cameo-Studio-0.3.0-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/cameo-studio/releases), extract it and open **Cameo Studio.app**.
+Download `TD-Capture-0.3.1-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/td-capture/releases), extract it and open **TD Capture.app**.
 
 This is an early local prototype. The prebuilt app is ad hoc signed, **not Developer ID signed or notarized**, so macOS may prevent opening an Internet-downloaded copy. Building from source on your Mac is the alternative; the release is not an App Store distribution.
 
@@ -29,10 +29,10 @@ This is an early local prototype. The prebuilt app is ad hoc signed, **not Devel
 Install Apple's Xcode Command Line Tools, then:
 
 ```sh
-git clone https://github.com/JoyceGu/cameo-studio.git
-cd cameo-studio
+git clone https://github.com/JoyceGu/td-capture.git
+cd td-capture
 ./build.sh
-open "Cameo Studio.app"
+open "TD Capture.app"
 ```
 
 The script uses system Swift and frameworks only; there are no third-party dependencies. It creates an Apple Silicon binary targeting macOS 15+, signs it locally, and replaces the app only after compilation and verification. Quit any running copy before installing a new build.
@@ -61,6 +61,8 @@ Use **Settings → Interface language** (⌘,) to switch languages. Permission s
 
 Camera, microphone, screen capture, background segmentation, encoding and settings storage run locally. The app has no upload or telemetry feature. Scripts and preferences are saved with macOS UserDefaults. The watercolor icon and preset background images were generated with ImageGen; the prompts are included under `Assets/`.
 
+The application keeps its original internal bundle identifier for upgrade compatibility, preserving existing scripts and preferences. The displayed product name and executable are TD Capture.
+
 ## Source and validation
 
 - `Sources/main.swift`: AppKit UI, language settings, camera/screen capture, teleprompter, compositor and MP4 writer.
@@ -72,6 +74,6 @@ Verified on the development Mac: native build and signature validation; H.264/AA
 
 ## 中文简介
 
-Cameo Studio 可以同步录制屏幕、摄像头和麦克风，并合成为一个 MP4。附带不入镜的提词器、中英文切换、背景模糊和三张背景预选。所有处理在本机完成。
+TD Capture 可以同步录制屏幕、摄像头和麦克风，并合成为一个 MP4。附带不入镜的提词器、中英文切换、背景模糊和三张背景预选。所有处理在本机完成。
 
 首次使用请允许屏幕录制、摄像头和麦克风权限，建议先录十秒样片。当前仅支持 Apple Silicon Mac / macOS 15+；发布包尚未经过 Apple 公证，也可通过 `./build.sh` 在本机编译。详细操作见[使用说明](使用说明.md)。

@@ -31,15 +31,15 @@ let englishStrings: [String: String] = [
     "设置…": "Settings…",
     "界面语言": "Interface language",
     "更改后立即生效，并自动保存。": "Changes apply immediately and are saved automatically.",
-    "关于 Cameo Studio": "About Cameo Studio",
-    "退出 Cameo Studio": "Quit Cameo Studio",
+    "关于 TD Capture": "About TD Capture",
+    "退出 TD Capture": "Quit TD Capture",
     "编辑": "Edit",
     "撤销": "Undo",
     "剪切": "Cut",
     "复制": "Copy",
     "粘贴": "Paste",
     "全选": "Select All",
-    "Cameo Studio · 录屏与提词器": "Cameo Studio · Recorder & Teleprompter",
+    "TD Capture · 录屏与提词器": "TD Capture · Recorder & Teleprompter",
     "把演示、出镜和讲稿放在一起。": "Your screen, camera and script, together.",
     "01  选择画面与声音": "01  Picture & sound",
     "02  人像布局": "02  Camera layout",
@@ -90,7 +90,7 @@ let englishStrings: [String: String] = [
     "没有可录制的来源。": "No recording sources found.",
     "来源已就绪。打开摄像头预览后即可开始录制。": "Sources ready. Open the camera preview to start recording.",
     "未检测到摄像头。连接后请重启应用。": "No camera detected. Connect one and reopen the app.",
-    "请在系统设置 → 隐私与安全性 → 摄像头中允许 Cameo Studio。": "Allow Cameo Studio in System Settings → Privacy & Security → Camera.",
+    "请在系统设置 → 隐私与安全性 → 摄像头中允许 TD Capture。": "Allow TD Capture in System Settings → Privacy & Security → Camera.",
     "摄像头已连接。人像会合成进 MP4；提词器不会录入。": "Camera connected. Your camera appears in the MP4; the teleprompter stays out.",
     "请先点击「选择 / 刷新录制来源」。": "Click “Choose / refresh sources” first.",
     "请先打开摄像头预览，确认可以正常出镜。": "Open the camera preview first and check your picture.",
@@ -104,7 +104,7 @@ let englishStrings: [String: String] = [
     "录制错误：%@": "Recording error: %@",
     "屏幕 %d · %d × %d": "Screen %d · %d × %d",
     "窗口 · %@ · %@": "Window · %@ · %@",
-    "无法读取屏幕：%@。请到系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 Cameo Studio，必要时重启应用。": "Cannot load screens: %@. Allow Cameo Studio in System Settings → Privacy & Security → Screen & System Audio Recording, then reopen the app if needed.",
+    "无法读取屏幕：%@。请到系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 TD Capture，必要时重启应用。": "Cannot load screens: %@. Allow TD Capture in System Settings → Privacy & Security → Screen & System Audio Recording, then reopen the app if needed.",
     "摄像头连接失败：%@": "Camera connection failed: %@",
     "%d 秒后开始录制…": "Recording starts in %d…",
     "正在录制 · %d × %d · %@ · 提词器不入镜": "Recording · %d × %d · %@ · Script excluded",
@@ -493,9 +493,9 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     }
     func createMenu() {
         let menu = NSMenu(); let app = NSMenuItem(); menu.addItem(app); let sub = NSMenu(); app.submenu = sub
-        sub.addItem(withTitle: L("关于 Cameo Studio"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        sub.addItem(withTitle: L("关于 TD Capture"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         let settings = sub.addItem(withTitle: L("设置…"), action: #selector(openSettings), keyEquivalent: ","); settings.target = self
-        sub.addItem(NSMenuItem.separator()); sub.addItem(withTitle: L("退出 Cameo Studio"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        sub.addItem(NSMenuItem.separator()); sub.addItem(withTitle: L("退出 TD Capture"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let edit = NSMenuItem(); menu.addItem(edit); edit.title = L("编辑"); edit.submenu = NSMenu(title: L("编辑"))
         for (title, action, key) in [("撤销", "undo:", "z"), ("剪切", "cut:", "x"), ("复制", "copy:", "c"), ("粘贴", "paste:", "v"), ("全选", "selectAll:", "a")] {
             edit.submenu?.addItem(withTitle: L(title), action: Selector(action), keyEquivalent: key)
@@ -511,11 +511,11 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     }
     func buildUI() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 650, height: 690), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "Cameo Studio · 录屏与提词器"; window.isReleasedWhenClosed = false; window.delegate = self
+        window.title = "TD Capture · 录屏与提词器"; window.isReleasedWhenClosed = false; window.delegate = self
         let root = NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 16
         root.edgeInsets = NSEdgeInsets(top: 26, left: 30, bottom: 26, right: 30); window.contentView = root
         settingsButton = NSButton(title: L("设置"), target: self, action: #selector(openSettings))
-        let header = NSStackView(views: [label("Cameo Studio", size: 30, weight: .bold), settingsButton]); header.spacing = 100
+        let header = NSStackView(views: [label("TD Capture", size: 30, weight: .bold), settingsButton]); header.spacing = 100
         root.addArrangedSubview(header)
         root.addArrangedSubview(label("把演示、出镜和讲稿放在一起。", size: 15))
         root.addArrangedSubview(label("01  选择画面与声音", size: 13, weight: .semibold))
@@ -574,7 +574,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         status.stringValue = arguments.isEmpty ? template : String(format: template, arguments: arguments)
     }
     func applyLanguage() {
-        window.title = L("Cameo Studio · 录屏与提词器")
+        window.title = L("TD Capture · 录屏与提词器")
         for (field, key) in localizedLabels { field.stringValue = L(key) }
         settingsButton.title = L("设置"); promptButton.title = L("打开提词器 ↗")
         mirror.title = L("镜像人像"); refreshButton.title = L("选择 / 刷新录制来源")
@@ -636,7 +636,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
                     source.addItem(withTitle: L("窗口 · %@ · %@", w.owningApplication?.applicationName ?? "", w.title ?? "")); sources.append((nil, w))
                 }
                 showStatus(sources.isEmpty ? "没有可录制的来源。" : "来源已就绪。打开摄像头预览后即可开始录制。")
-            } catch { showStatus("无法读取屏幕：%@。请到系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 Cameo Studio，必要时重启应用。", error.localizedDescription) }
+            } catch { showStatus("无法读取屏幕：%@。请到系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 TD Capture，必要时重启应用。", error.localizedDescription) }
         }
     }
     @objc func cameraChanged() {
@@ -648,7 +648,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         busy = true; start.isEnabled = false; previewButton.isEnabled = false
         Task { @MainActor in
             defer { busy = false; start.isEnabled = true; previewButton.isEnabled = true }
-            guard await AVCaptureDevice.requestAccess(for: .video) else { showStatus("请在系统设置 → 隐私与安全性 → 摄像头中允许 Cameo Studio。"); return }
+            guard await AVCaptureDevice.requestAccess(for: .video) else { showStatus("请在系统设置 → 隐私与安全性 → 摄像头中允许 TD Capture。"); return }
             do {
                 try await recorder.configureCamera(id: cameras[camera.indexOfSelectedItem].uniqueID)
                 cameraReady = true; previewButton.title = L("显示摄像头预览"); layoutChanged(); bubble.orderFrontRegardless()
@@ -693,7 +693,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         guard !busy else { return }
         guard sources.indices.contains(source.indexOfSelectedItem), let content else { showStatus("请先点击「选择 / 刷新录制来源」。"); return }
         guard cameraReady else { showStatus("请先打开摄像头预览，确认可以正常出镜。"); return }
-        let save = NSSavePanel(); save.allowedContentTypes = [.mpeg4Movie]; save.nameFieldStringValue = "Cameo-\(Self.stamp()).mp4"; save.canCreateDirectories = true
+        let save = NSSavePanel(); save.allowedContentTypes = [.mpeg4Movie]; save.nameFieldStringValue = "TD-Capture-\(Self.stamp()).mp4"; save.canCreateDirectories = true
         guard save.runModal() == .OK, let url = save.url else { return }
         // AVAssetWriter requires a new path. Preserve existing recordings rather than deleting them.
         guard !FileManager.default.fileExists(atPath: url.path) else { showStatus("请选择一个新的文件名，避免覆盖已有录制。"); return }
