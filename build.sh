@@ -9,7 +9,7 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 xcrun swiftc -swift-version 5 -O -target arm64-apple-macosx15.0 \
   -module-cache-path "${TMPDIR:-/tmp}/CameoStudioModuleCache-v2" \
   "$ROOT/Sources/"*.swift -o "$STAGE/Contents/MacOS/TDCapture" \
-  -framework AppKit -framework AVFoundation -framework ScreenCaptureKit -framework CoreImage -framework UniformTypeIdentifiers -framework Vision
+  -framework AppKit -framework AVFoundation -framework ScreenCaptureKit -framework CoreImage -framework UniformTypeIdentifiers -framework Vision -framework Carbon
 cp "$ROOT/Assets/TDCapture.icns" "$STAGE/Contents/Resources/TDCapture.icns"
 cp "$ROOT/Assets/Backgrounds/"*.png "$STAGE/Contents/Resources/"
 cp -R "$ROOT/Resources/Localizations" "$STAGE/Contents/Resources/Localizations"

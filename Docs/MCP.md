@@ -7,7 +7,7 @@ No Node.js, Python runtime, background web server, account or API key is needed 
 ## Configure an AI client
 
 1. Keep the app in a stable location, for example `/Applications/TD Capture.app`.
-2. In TD Capture, open **Script library → Copy MCP configuration**. The copied command points to the actual installed app.
+2. In TD Capture, open **Script library → Import via MCP → Copy connection configuration**. The copied command points to the actual installed app.
 3. Add the entry to your AI client's MCP configuration using that client's configuration format, then reconnect or restart the client.
 
 For clients using the `mcpServers` JSON convention:

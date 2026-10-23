@@ -11,6 +11,7 @@ A native macOS recorder that combines your screen, camera and microphone into on
 ## Features
 
 - Record a display or an individual window, including browser and desktop apps.
+- Open a floating recording control panel for pointer emphasis, drawing and 1×–3× zoom around the cursor; optionally enable global zoom/pen shortcuts.
 - Composite your camera into the recording as a circle or rounded rectangle; adjust size, position and mirroring.
 - Organize multiple scripts in a local library; import or drag in TXT/Markdown files.
 - Let a local MCP-capable AI client create, update and open scripts without interrupting a recording. See [MCP setup](Docs/MCP.md).
@@ -41,7 +42,7 @@ The script uses system Swift and frameworks only; there are no third-party depen
 
 ## Record a video
 
-1. Click **Choose / refresh sources**, allow screen recording when macOS asks, and select a screen or window.
+1. Click **Choose a window…** and use the macOS window picker. For a full display, click **Record an entire screen…** and confirm the screen in the macOS system picker.
 2. Choose your camera and microphone. Open the camera preview and allow camera access.
 3. Set camera shape, position, size and mirroring. Use **Background…** to choose blur or a preset image.
 4. Open the teleprompter, paste your script and adjust scrolling. Scrolling is controlled separately from recording.
@@ -52,7 +53,15 @@ Use **Settings → Interface language** (⌘,) to switch languages. Permission s
 
 ## Scripts from AI clients
 
-Open **Script library → Copy MCP configuration** and add the copied command to an AI client supporting local stdio MCP. The app does not modify client settings automatically. The tools can create/list/read/update notes, queue an open request and check its status; they never start recording. Setup, examples and limits: [Docs/MCP.md](Docs/MCP.md).
+Open **Script library → Import via MCP → Copy connection configuration** and add the copied command to an AI client supporting local stdio MCP. The app does not modify client settings automatically. The tools can create/list/read/update notes, queue an open request and check its status; they never start recording. Setup, examples and limits: [Docs/MCP.md](Docs/MCP.md).
+
+## Recording controls
+
+Open **Recording controls…** at the top of the setup screen. Feature checkboxes and pen options appear first, followed by a **Keyboard shortcuts** section with the key guide; there are no mouse-operated zoom buttons. Normal mouse clicks do not change zoom. Pointer tracking adds a halo, emphasizes presses, and follows the pointer while zoomed. The pen draws on a transparent source-sized canvas; ink is included in the exported MP4. Turn the pen off to click normally in the source app, or use **Clear drawing** to remove all strokes. Drawing remains until cleared or the source changes.
+
+Global shortcuts are enabled by default (and remember your choice). Use **⌘⌥ =** (jump to 3×), **⌘⌥ −** (return to 1×), **⌘⌥ 0** (reset), **⌘⌥ P** (toggle pen on/off), and **⌘⌥ K** (clear all drawing without changing pen mode). Zoom is limited to 1×–3× and applies to the exported recording; it does not magnify the live desktop. The camera overlay remains fixed. A floating badge shows the magnified state; returning to 1× shows a short confirmation. Pen mode adds a purple border, a faint tint, and a visible mode badge; drag inside the selected source to draw. Controls and the live annotation canvas are excluded from full-display capture; ink is composited separately. A selected single-window recording captures that window only.
+
+Both window and whole-display selection use the macOS system picker. After display selection, TD Capture excludes its own windows and validates one real frame before accepting the source; the validation image is discarded. Selection failures show the actual error and preserve the previous source instead of repeatedly claiming the Settings permission toggle is off. macOS may still require an explicit sharing confirmation for the chosen source. Excluding recorder windows uses a separate filter and requires effective Screen & System Audio Recording permission; a picker grant alone is insufficient. If that stage returns `-3801` despite an enabled Settings switch after a local rebuild, remove the old TD Capture entry, add the current app, and relaunch if macOS requests it. The app checks the original picker filter first and reports which stage failed. Window-relative pointer and pen placement uses window metadata available on macOS 15.2 and later.
 
 ## Current limits
 

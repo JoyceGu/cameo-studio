@@ -17,118 +17,235 @@ final class NoteDropStack: NSStackView {
     }
 }
 
-final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSTextViewDelegate, NSTextFieldDelegate, NSWindowDelegate {
     let panel: NSPanel
     let table = NSTableView()
     let titleField = NSTextField(string: "")
-    let preview = NSTextView()
+    let editor = NSTextView()
+    let heading = NSTextField(labelWithString: "")
+    let subtitle = NSTextField(labelWithString: "")
+    let libraryCaption = NSTextField(labelWithString: "")
+    let editorHint = NSTextField(labelWithString: "")
     let message = NSTextField(wrappingLabelWithString: "")
-    let help = NSTextField(wrappingLabelWithString: "")
     let newButton = NSButton(title: "", target: nil, action: nil)
     let importButton = NSButton(title: "", target: nil, action: nil)
-    let openButton = NSButton(title: "", target: nil, action: nil)
-    let renameButton = NSButton(title: "", target: nil, action: nil)
-    let configButton = NSButton(title: "", target: nil, action: nil)
+    let mcpButton = NSButton(title: "", target: nil, action: nil)
     var notes: [ScriptNote] = []
-    var store: NoteStore
-    var onOpen: ((String) -> Void)?
-    var onRenamed: ((ScriptNote) -> Void)?
+    let store: NoteStore
+    var onSelect: ((ScriptNote) -> Void)?
+    var onEdited: ((ScriptNote) -> Void)?
+    var editorNote: ScriptNote?
+    var hasPendingEdits = false
+    var lastEditTime: Double = 0
+    var reloading = false
     var timer: Timer?
 
     init(store: NoteStore) {
         self.store = store
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 760, height: 540), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 900, height: 736), styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         super.init()
-        panel.isReleasedWhenClosed = false
-        let root = NoteDropStack(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 12
-        root.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20); panel.contentView = root
+        panel.isReleasedWhenClosed = false; panel.delegate = self
+        panel.appearance = NSAppearance(named: .aqua)
+        panel.titlebarAppearsTransparent = true; panel.titleVisibility = .hidden
+        let canvas = WatercolorSetupView(); panel.contentView = canvas
+        let root = NoteDropStack(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 16
+        root.translatesAutoresizingMaskIntoConstraints = false; canvas.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: canvas.leadingAnchor, constant: 28),
+            root.trailingAnchor.constraint(equalTo: canvas.trailingAnchor, constant: -28),
+            root.topAnchor.constraint(equalTo: canvas.topAnchor, constant: 46),
+            root.bottomAnchor.constraint(lessThanOrEqualTo: canvas.bottomAnchor, constant: -24)
+        ])
         root.onFiles = { [weak self] urls in self?.importFiles(urls) }
-        let toolbar = NSStackView(views: [newButton, importButton, openButton, configButton]); toolbar.spacing = 12; root.addArrangedSubview(toolbar)
-        for (button, action) in [(newButton, #selector(createNote)), (importButton, #selector(importNotes)), (openButton, #selector(openSelected)), (renameButton, #selector(renameSelected)), (configButton, #selector(copyMCPConfiguration))] { button.target = self; button.action = action }
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("title")); column.width = 680; table.addTableColumn(column)
-        table.headerView = nil; table.rowHeight = 38; table.delegate = self; table.dataSource = self
-        let list = NSScrollView(); list.documentView = table; list.hasVerticalScroller = true
-        list.widthAnchor.constraint(equalToConstant: 700).isActive = true; list.heightAnchor.constraint(equalToConstant: 160).isActive = true
-        root.addArrangedSubview(list)
-        titleField.placeholderString = L("Script title"); titleField.widthAnchor.constraint(equalToConstant: 570).isActive = true
-        let titleRow = NSStackView(views: [titleField, renameButton]); titleRow.spacing = 12; root.addArrangedSubview(titleRow)
-        preview.isEditable = false; preview.isSelectable = true; preview.font = .systemFont(ofSize: 15)
-        preview.textContainerInset = NSSize(width: 10, height: 10); preview.isVerticallyResizable = true
-        preview.isHorizontallyResizable = false; preview.textContainer?.widthTracksTextView = true; preview.autoresizingMask = [.width]
-        let previewScroll = NSScrollView(); previewScroll.documentView = preview; previewScroll.hasVerticalScroller = true
-        previewScroll.widthAnchor.constraint(equalToConstant: 700).isActive = true; previewScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
-        root.addArrangedSubview(previewScroll)
-        help.preferredMaxLayoutWidth = 700; help.font = .systemFont(ofSize: 12); help.textColor = .secondaryLabelColor
-        message.preferredMaxLayoutWidth = 700; message.font = .systemFont(ofSize: 12)
-        root.addArrangedSubview(help); root.addArrangedSubview(message)
+        heading.font = .systemFont(ofSize: 26, weight: .semibold); heading.textColor = SetupTheme.ink
+        heading.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        subtitle.font = .systemFont(ofSize: 12); subtitle.textColor = SetupTheme.muted
+        subtitle.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        root.addArrangedSubview(SetupTheme.stack([heading, subtitle], vertical: true, spacing: 6))
+        let actions = SetupTheme.stack([newButton, importButton, mcpButton], spacing: 12)
+        for (button, action, symbol) in [(newButton, #selector(createNote), "plus"), (importButton, #selector(importNotes), "doc.badge.arrow.up"), (mcpButton, #selector(showMCPImport), "point.3.connected.trianglepath.dotted")] {
+            button.target = self; button.action = action; SetupTheme.button(button)
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil); button.imagePosition = .imageLeading
+            button.widthAnchor.constraint(equalToConstant: 273).isActive = true
+        }
+        root.addArrangedSubview(actions)
+
+        let listCard = SetupCard(padding: 16)
+        libraryCaption.font = .systemFont(ofSize: 12, weight: .semibold); libraryCaption.textColor = SetupTheme.muted
+        listCard.content.addArrangedSubview(libraryCaption)
+        libraryCaption.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("title")); column.width = 188
+        table.addTableColumn(column); table.headerView = nil; table.rowHeight = 44
+        table.delegate = self; table.dataSource = self; table.style = .sourceList
+        table.target = self; table.action = #selector(selectScript)
+        table.backgroundColor = .clear; table.allowsEmptySelection = false
+        let list = NSScrollView(); list.documentView = table; list.hasVerticalScroller = true; list.drawsBackground = false
+        listCard.content.addArrangedSubview(list)
+        list.widthAnchor.constraint(equalToConstant: 192).isActive = true
+        list.heightAnchor.constraint(equalToConstant: 348).isActive = true
+
+        let editorCard = SetupCard(padding: 20)
+        titleField.isBordered = false; titleField.drawsBackground = false
+        titleField.font = .systemFont(ofSize: 19, weight: .semibold); titleField.textColor = SetupTheme.ink
+        titleField.delegate = self
+        editorCard.content.addArrangedSubview(titleField)
+        titleField.widthAnchor.constraint(equalTo: editorCard.content.widthAnchor).isActive = true
+        titleField.heightAnchor.constraint(equalToConstant: 34).isActive = true
+        editor.isRichText = false; editor.isEditable = true; editor.isSelectable = true; editor.allowsUndo = true
+        editor.delegate = self; editor.font = .systemFont(ofSize: 15); editor.textColor = SetupTheme.ink
+        editor.backgroundColor = .clear; editor.drawsBackground = false
+        editor.textContainerInset = NSSize(width: 6, height: 12)
+        editor.isVerticallyResizable = true; editor.isHorizontallyResizable = false
+        editor.textContainer?.widthTracksTextView = true; editor.autoresizingMask = [.width]
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = 7
+        editor.defaultParagraphStyle = paragraph
+        let editorScroll = NSScrollView(); editorScroll.documentView = editor; editorScroll.hasVerticalScroller = true; editorScroll.drawsBackground = false
+        editorCard.content.addArrangedSubview(editorScroll)
+        editorScroll.widthAnchor.constraint(equalTo: editorCard.content.widthAnchor).isActive = true
+        editorScroll.heightAnchor.constraint(equalToConstant: 284).isActive = true
+        editorHint.font = .systemFont(ofSize: 11); editorHint.textColor = SetupTheme.muted
+        editorCard.content.addArrangedSubview(editorHint)
+        editorHint.heightAnchor.constraint(equalToConstant: 18).isActive = true
+        let body = SetupTheme.stack([listCard, editorCard], spacing: 16); root.addArrangedSubview(body)
+        NSLayoutConstraint.activate([
+            body.widthAnchor.constraint(equalTo: root.widthAnchor),
+            listCard.widthAnchor.constraint(equalToConstant: 224),
+            editorCard.widthAnchor.constraint(equalToConstant: 604),
+            listCard.heightAnchor.constraint(equalToConstant: 420),
+            editorCard.heightAnchor.constraint(equalTo: listCard.heightAnchor)
+        ])
+        message.font = .systemFont(ofSize: 11); message.textColor = SetupTheme.muted
+        message.preferredMaxLayoutWidth = 844; root.addArrangedSubview(message)
+        message.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
         applyLanguage(); refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, self.panel.isVisible else { return }; self.refresh()
         }
     }
-    var selectedNote: ScriptNote? { notes.indices.contains(table.selectedRow) ? notes[table.selectedRow] : nil }
     func numberOfRows(in tableView: NSTableView) -> Int { notes.count }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        let text = NSTextField(labelWithString: notes[row].title + "  ·  r\(notes[row].revision)")
-        text.lineBreakMode = .byTruncatingTail; return text
+        let text = NSTextField(labelWithString: notes[row].title)
+        text.font = .systemFont(ofSize: 13, weight: .medium); text.lineBreakMode = .byTruncatingTail
+        let cell = NSView(); text.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(text)
+        NSLayoutConstraint.activate([
+            text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
+            text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            text.heightAnchor.constraint(equalToConstant: 24)
+        ])
+        return cell
     }
-    func tableViewSelectionDidChange(_ notification: Notification) { updateSelection() }
-    func updateSelection() {
-        let note = selectedNote
-        titleField.stringValue = note?.title ?? ""; preview.string = note?.content ?? ""
-        openButton.isEnabled = note != nil; renameButton.isEnabled = note != nil
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool { reloading || saveEditor() }
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard !reloading, notes.indices.contains(table.selectedRow) else { return }
+        loadEditor(notes[table.selectedRow]); onSelect?(notes[table.selectedRow])
+    }
+    @objc private func selectScript() {
+        guard saveEditor(), let note = editorNote else { return }; onSelect?(note)
+    }
+    private func loadEditor(_ note: ScriptNote) {
+        editorNote = note; hasPendingEdits = false
+        titleField.stringValue = note.title; editor.string = note.content
+        editor.undoManager?.removeAllActions()
+        editor.isEditable = true; titleField.isEnabled = true
+        editor.scrollRangeToVisible(NSRange(location: 0, length: 0))
     }
     func refresh(select id: String? = nil) {
         do {
-            guard titleField.currentEditor() == nil || id != nil else { return }
+            // Never replace a focused editor with a timer refresh or an MCP update.
+            let editing = titleField.currentEditor() != nil || panel.firstResponder === editor
+            guard id != nil || (!editing && !hasPendingEdits) else { return }
             let fresh = try store.list()
             guard fresh != notes || id != nil else { return }
-            let selected = id ?? selectedNote?.id
-            notes = fresh; table.reloadData()
-            if let selected, let index = notes.firstIndex(where: { $0.id == selected }) { table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }
-            else if !notes.isEmpty { table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
-            updateSelection()
-        } catch { showError(error) }
+            let selected = id ?? editorNote?.id
+            reloading = true; notes = fresh; table.reloadData()
+            if let index = notes.firstIndex(where: { $0.id == selected }) {
+                table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+                loadEditor(notes[index])
+            } else if let first = notes.first {
+                table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false); loadEditor(first)
+            } else {
+                editorNote = nil; editor.string = ""; titleField.stringValue = ""
+                editor.isEditable = false; titleField.isEnabled = false
+            }
+            reloading = false
+        } catch { reloading = false; showError(error) }
     }
+    @discardableResult private func saveEditor() -> Bool {
+        guard let note = editorNote else { return true }
+        let title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveTitle = title.isEmpty ? L("Untitled script") : title
+        guard effectiveTitle != note.title || editor.string != note.content else { hasPendingEdits = false; return true }
+        do {
+            let updated: ScriptNote
+            let latest = try store.get(note.id)
+            if latest.revision != note.revision {
+                // Preserve the visible draft when another MCP client edited this note.
+                updated = try store.create(title: String((effectiveTitle + " (local copy)").prefix(200)), content: editor.string)
+                showMessage("Another editor changed this script. Your edits were saved as a separate local copy.")
+            } else {
+                updated = try store.update(id: note.id, title: effectiveTitle, content: editor.string, expectedRevision: note.revision)
+                showMessage("Saved on this Mac.")
+            }
+            editorNote = updated; hasPendingEdits = false
+            if let index = notes.firstIndex(where: { $0.id == updated.id }) { notes[index] = updated }
+            else { notes.insert(updated, at: 0) }
+            reloading = true; table.reloadData()
+            if let index = notes.firstIndex(where: { $0.id == updated.id }) { table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false) }
+            reloading = false
+            onEdited?(updated); return true
+        } catch { hasPendingEdits = true; showError(error); return false }
+    }
+    func textDidChange(_ notification: Notification) { lastEditTime = ProcessInfo.processInfo.systemUptime; hasPendingEdits = true; _ = saveEditor() }
+    func controlTextDidChange(_ notification: Notification) { lastEditTime = ProcessInfo.processInfo.systemUptime; hasPendingEdits = true; _ = saveEditor() }
+    func controlTextDidEndEditing(_ notification: Notification) { _ = saveEditor() }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { saveEditor() }
     func showError(_ error: Error) { message.stringValue = L(error.localizedDescription); message.textColor = .systemOrange }
-    func showMessage(_ text: String) { message.stringValue = L(text); message.textColor = .secondaryLabelColor }
+    func showMessage(_ text: String) { message.stringValue = L(text); message.textColor = SetupTheme.muted }
     func applyLanguage() {
-        panel.title = L("Script library")
-        newButton.title = L("New script"); importButton.title = L("Import TXT / Markdown…")
-        openButton.title = L("Open in teleprompter"); renameButton.title = L("Rename")
-        configButton.title = L("Copy MCP configuration")
-        titleField.placeholderString = L("Script title")
-        help.stringValue = L("Drop TXT or Markdown files here. Edit script text in the teleprompter. Incoming scripts wait while recording or scrolling.")
+        panel.title = L("Script library"); heading.stringValue = L("Script library")
+        subtitle.stringValue = L("Write, paste or import. Keep your next take ready.")
+        newButton.title = L("New script"); importButton.title = L("Import from file"); mcpButton.title = L("Import via MCP")
+        libraryCaption.stringValue = L("Your scripts"); titleField.placeholderString = L("Script title")
+        editorHint.stringValue = L("Paste or type your script here. Changes save automatically.")
+        showMessage("TXT / Markdown supported. You can also drop files into this window.")
     }
     @objc func createNote() {
+        guard saveEditor() else { return }
         do {
             let note = try store.create(title: L("Untitled script"), content: "")
-            refresh(select: note.id); onOpen?(note.id)
+            refresh(select: note.id); onSelect?(note)
+            panel.makeFirstResponder(editor)
+            showMessage("Paste or type your script here. Changes save automatically.")
         } catch { showError(error) }
     }
     @objc func importNotes() {
+        guard saveEditor() else { return }
         let picker = NSOpenPanel(); picker.allowsMultipleSelection = true; picker.canChooseDirectories = false
         picker.allowedContentTypes = [.plainText, UTType(filenameExtension: "md") ?? .plainText, UTType(filenameExtension: "markdown") ?? .plainText]
         guard picker.runModal() == .OK else { return }; importFiles(picker.urls)
     }
     func importFiles(_ urls: [URL]) {
-        var last: ScriptNote?
-        var failures: [String] = []
+        guard saveEditor() else { return }
+        var last: ScriptNote?; var failures: [String] = []
         for url in urls {
             do { last = try store.importFile(url) }
             catch { failures.append(url.lastPathComponent + ": " + L(error.localizedDescription)) }
         }
         refresh(select: last?.id)
-        if failures.isEmpty { showMessage("Scripts imported. Select one and open it in the teleprompter.") }
+        if let last { onSelect?(last) }
+        if failures.isEmpty { showMessage("Imported and saved on this Mac.") }
         else { message.stringValue = failures.joined(separator: "\n"); message.textColor = .systemOrange }
     }
-    @objc func openSelected() { if let note = selectedNote { onOpen?(note.id) } }
-    @objc func renameSelected() {
-        guard let note = selectedNote else { return }
-        do { let updated = try store.update(id: note.id, title: titleField.stringValue, expectedRevision: note.revision); onRenamed?(updated); refresh(select: updated.id) }
-        catch { showError(error) }
+    @objc func showMCPImport() {
+        let alert = NSAlert(); alert.messageText = L("Import via MCP")
+        alert.informativeText = L("Connect your AI client once, then ask it to create a script in TD Capture. Imported scripts appear in this library.\n\n1. Copy the connection configuration.\n2. Add it to an AI client that supports local stdio MCP.\n3. Ask the AI to create a note in TD Capture.\n\nThis button sets up the connection; it does not upload files or connect a client automatically.")
+        alert.addButton(withTitle: L("Copy connection configuration")); alert.addButton(withTitle: L("Cancel"))
+        alert.beginSheetModal(for: panel) { [weak self] response in
+            if response == .alertFirstButtonReturn { self?.copyMCPConfiguration() }
+        }
     }
-    @objc func copyMCPConfiguration() {
+    private func copyMCPConfiguration() {
         guard let executable = Bundle.main.executableURL else { return }
         let config: [String: Any] = ["mcpServers": ["td-capture": ["command": executable.path, "args": ["--mcp"]]]]
         guard let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]), let text = String(data: data, encoding: .utf8) else { return }
@@ -170,12 +287,8 @@ final class NotesCoordinator {
         library = NotesLibraryPanel(store: store)
         display(activeNote, show: false)
         prompter.onScriptEdited = { [weak self] content in self?.saveEdit(content) }
-        library.onOpen = { [weak self] id in self?.requestOpen(id) }
-        library.onRenamed = { [weak self] note in
-            guard let self, note.id == self.activeNote.id, note.content == self.activeNote.content else { return }
-            // A local title-only change can safely advance the active revision.
-            self.activeNote = note; self.prompter.scriptTitle = note.title; self.prompter.applyLanguage()
-        }
+        library.onSelect = { [weak self] note in self?.useLibraryNote(note) }
+        library.onEdited = { [weak self] note in self?.useLibraryNote(note) }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.processPendingRequests() }
     }
     private func display(_ note: ScriptNote, show: Bool) {
@@ -203,6 +316,14 @@ final class NotesCoordinator {
             }
         }
     }
+    private func useLibraryNote(_ note: ScriptNote) {
+        guard canOpen(), !(prompter.running && prompter.panel.isVisible), !hasUnsavedDraft,
+              ProcessInfo.processInfo.systemUptime - prompter.lastEditTime > 1 else {
+            library.showMessage("Saved. Select this script again when recording and scrolling stop to use it.")
+            return
+        }
+        display(note, show: false)
+    }
     func requestOpen(_ id: String) {
         do {
             _ = try store.enqueueOpen(noteId: id)
@@ -212,7 +333,8 @@ final class NotesCoordinator {
     }
     func processPendingRequests() {
         guard canOpen(), !(prompter.running && prompter.panel.isVisible), !hasUnsavedDraft,
-              ProcessInfo.processInfo.systemUptime - prompter.lastEditTime > 1 else { return }
+              ProcessInfo.processInfo.systemUptime - prompter.lastEditTime > 1,
+              !library.hasPendingEdits, ProcessInfo.processInfo.systemUptime - library.lastEditTime > 1 else { return }
         do {
             guard let request = try store.pendingRequests().first else { return }
             do {
