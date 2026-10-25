@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 (build 9)
+
+- Add Settings → Check for updates using the latest stable GitHub Release, with numeric version and build comparison.
+- Download and verify the expected Apple Silicon ZIP, GitHub SHA-256 digest, safe archive paths, bundle identity, system requirements and code signature.
+- Save edits and back up the script library and preferences before a confirmed restart. Keep data in its existing location.
+- Use a separate installer after the main app quits; retain the previous app and restore it on replacement or launch failure.
+- Prevent installation while recording, counting down, exporting or scrolling the teleprompter.
+- Preserve an existing local Apple Development signing identity when its certificate is available.
+- Add isolated updater, rollback and data-preservation tests.
+
 ## 0.5.0
 
 Build 8 refresh: add a × button beside each script, persistent recoverable deletion and Undo deletion. Preserve active scripts while recording or scrolling and prevent stale clients from overwriting restored notes.

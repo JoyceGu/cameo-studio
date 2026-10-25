@@ -95,6 +95,9 @@ final class NoteStore {
         }
     }
     func get(_ id: String) throws -> ScriptNote { try locked { try readUnlocked(id) } }
+    func backupLibrary(to destination: URL) throws {
+        try locked { try manager.copyItem(at: directory, to: destination) }
+    }
     func deletedNotes() throws -> [ScriptNote] {
         try locked {
             try manager.contentsOfDirectory(at: deletedDirectory, includingPropertiesForKeys: nil)

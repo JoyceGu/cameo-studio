@@ -241,6 +241,7 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
     func controlTextDidChange(_ notification: Notification) { lastEditTime = ProcessInfo.processInfo.systemUptime; hasPendingEdits = true; _ = saveEditor() }
     func controlTextDidEndEditing(_ notification: Notification) { _ = saveEditor() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { saveEditor() }
+    func savePendingEdits() -> Bool { saveEditor() }
     func showError(_ error: Error) { message.stringValue = L(error.localizedDescription); message.textColor = .systemOrange }
     func showMessage(_ text: String) { message.stringValue = L(text); message.textColor = SetupTheme.muted }
     func applyLanguage() {

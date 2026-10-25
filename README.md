@@ -23,9 +23,15 @@ A native macOS recorder that combines your screen, camera and microphone into on
 
 ## Install
 
-Download `TD-Capture-0.5.0-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/td-capture/releases), extract it and open **TD Capture.app**.
+Download `TD-Capture-0.6.0-macOS-arm64.zip` from [Releases](https://github.com/JoyceGu/td-capture/releases), extract it and open **TD Capture.app**.
 
 This is an early local prototype. The prebuilt app is ad hoc signed, **not Developer ID signed or notarized**, so macOS may prevent opening an Internet-downloaded copy. Building from source on your Mac is the alternative; the release is not an App Store distribution.
+
+## In-app updates
+
+Settings → **Check for updates** checks the latest stable GitHub Release and compares both version and build number. A newer release can be downloaded, validated and installed after you confirm a restart. The app backs up the notes library and preferences, leaves the existing data directories in place, and retains the previous application for recovery. Recording, exporting and active teleprompter scrolling block installation. See [update behavior and release requirements](Docs/UPDATES.md).
+
+The updater is included starting with 0.6.0. Users on 0.5.0 or earlier must install 0.6.0 manually once; later releases can be installed from Settings. Public ad hoc updates may still require renewed macOS recording permission.
 
 ## Build from source
 

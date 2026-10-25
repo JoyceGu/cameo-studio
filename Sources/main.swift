@@ -381,6 +381,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     var languagePicker: NSPopUpButton?
     var settingsLabel: NSTextField?
     var settingsNote: NSTextField?
+    let updater = AppUpdater()
     var statusKey = "Choose a source, then open the camera preview. Everything stays on your Mac."
     var statusArguments: [CVarArg] = []
     let recorder = Recorder()
@@ -599,6 +600,15 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
             })
             notesCoordinator?.onMessage = { [weak self] text in self?.showStatus(text) }
         } catch { showStatus(error.localizedDescription) }
+        updater.canInstall = { [weak self] in
+            guard let self, !self.recording, !self.busy, !self.prompter.running,
+                  self.notesCoordinator?.hasUnsavedDraft != true,
+                  ProcessInfo.processInfo.systemUptime - self.prompter.lastEditTime > 1 else { return false }
+            return self.notesCoordinator?.library.savePendingEdits() ?? true
+        }
+        updater.onInstallStateChanged = { [weak self] installing in
+            self?.busy = installing; self?.start.isEnabled = !installing; self?.lockControls(installing)
+        }
         applyLanguage(); layoutChanged()
     }
     func showStatus(_ key: String, _ arguments: CVarArg...) {
@@ -628,6 +638,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         controlButton?.title = L("Recording controls…"); controlPanel?.applyLanguage()
         settingsPanel?.title = L("Settings"); settingsLabel?.stringValue = L("Interface language")
         settingsNote?.stringValue = L("Changes apply immediately and are saved automatically.")
+        updater.applyLanguage()
         languagePicker?.selectItem(at: UserDefaults.standard.string(forKey: "ui.language") == "en" ? 1 : 0)
         backgroundButton.title = L("Background…"); backgroundPanel?.applyLanguage()
         backgroundPanel?.warning.stringValue = backgroundWarning.map { L($0) } ?? ""
@@ -635,7 +646,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     }
     @objc func openSettings() {
         if settingsPanel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 155), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 500, height: 310), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             panel.isReleasedWhenClosed = false; panel.level = .floating
             let root = NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 20
             root.edgeInsets = NSEdgeInsets(top: 26, left: 26, bottom: 26, right: 26)
@@ -644,7 +655,9 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
             picker.target = self; picker.action = #selector(languageChanged); languagePicker = picker
             let row = NSStackView(views: [settingsLabel!, picker]); row.spacing = 24; root.addArrangedSubview(row)
             settingsNote = NSTextField(labelWithString: L("Changes apply immediately and are saved automatically.")); settingsNote?.font = .systemFont(ofSize: 12)
-            root.addArrangedSubview(settingsNote!); panel.contentView = root; settingsPanel = panel
+            root.addArrangedSubview(settingsNote!)
+            root.addArrangedSubview(updater.view)
+            panel.contentView = root; settingsPanel = panel
         }
         settingsPanel?.title = L("Settings")
         languagePicker?.selectItem(at: UserDefaults.standard.string(forKey: "ui.language") == "en" ? 1 : 0)
@@ -774,6 +787,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     }
     static func stamp() -> String { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd-HHmmss"; return f.string(from: Date()) }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if updater.isInstalling { return .terminateNow }
         if recording { terminationPending = true; finishRecording(); return .terminateLater }
         if busy { return .terminateCancel }
         return .terminateNow
@@ -785,7 +799,9 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     func applicationWillTerminate(_ notification: Notification) { controlPanel.close(); sourcePicker.close(); recorder.stopCamera() }
 }
 
-if CommandLine.arguments.contains("--mcp") {
+if let index = CommandLine.arguments.firstIndex(of: "--install-update"), CommandLine.arguments.count > index + 1 {
+    exit(UpdateInstaller.handleJob(at: CommandLine.arguments[index + 1]))
+} else if CommandLine.arguments.contains("--mcp") {
     do {
         var directory: URL?
         if let index = CommandLine.arguments.firstIndex(of: "--notes-directory"), CommandLine.arguments.count > index + 1 {

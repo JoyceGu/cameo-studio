@@ -57,6 +57,10 @@ struct NoteStoreTests {
         try reopened.delete(id: restored.id, expectedRevision: restored.revision)
         for deleted in try reopened.deletedNotes() { _ = try reopened.restoreDeleted(deleted.id) }
         try check(try reopened.list().count == 2, "Multiple deletions must be recoverable")
+        let backup = root.appendingPathComponent("Backup")
+        try reopened.backupLibrary(to: backup)
+        let saved = try NoteStore(directory: backup)
+        try check(try saved.list() == reopened.list(), "Update backup must preserve all library data")
         print("PASS: TXT/Markdown and UTF-16 import, invalid/oversized files, persistent open queue and acknowledgments, title updates")
         print("PASS: revision-safe deletion, persistent recovery, undo, stale-editor protection and multiple deletions")
     }
