@@ -41,13 +41,14 @@ final class NoteStore {
             self.directory = try manager.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 .appendingPathComponent("TD Capture/Notes", isDirectory: true)
         }
-        for path in [self.directory, requestsDirectory, resultsDirectory] {
+        for path in [self.directory, requestsDirectory, resultsDirectory, deletedDirectory] {
             try manager.createDirectory(at: path, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
     }
 
     private var requestsDirectory: URL { directory.appendingPathComponent("OpenRequests", isDirectory: true) }
     private var resultsDirectory: URL { directory.appendingPathComponent("OpenResults", isDirectory: true) }
+    private var deletedDirectory: URL { directory.appendingPathComponent("Deleted", isDirectory: true) }
     private static func timestamp() -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -94,6 +95,38 @@ final class NoteStore {
         }
     }
     func get(_ id: String) throws -> ScriptNote { try locked { try readUnlocked(id) } }
+    func deletedNotes() throws -> [ScriptNote] {
+        try locked {
+            try manager.contentsOfDirectory(at: deletedDirectory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "json" }
+                .map { try JSONDecoder().decode(ScriptNote.self, from: Data(contentsOf: $0)) }
+                .sorted { $0.updatedAt > $1.updatedAt }
+        }
+    }
+    func delete(id: String, expectedRevision: Int) throws {
+        try locked {
+            var note = try readUnlocked(id)
+            guard note.revision == expectedRevision else { throw NoteError(message: "This script changed elsewhere. Reload it before deleting.") }
+            note.updatedAt = Self.timestamp()
+            // Write the recovery copy before removing the library entry.
+            try write(note, to: deletedDirectory.appendingPathComponent(note.id + ".json"))
+            try manager.removeItem(at: file(for: note.id))
+        }
+    }
+    func restoreDeleted(_ id: String) throws -> ScriptNote {
+        try locked {
+            let id = try validateId(id)
+            let archived = deletedDirectory.appendingPathComponent(id + ".json")
+            guard manager.fileExists(atPath: archived.path) else { throw NoteError(message: "The deleted script was not found.") }
+            let destination = try file(for: id)
+            guard !manager.fileExists(atPath: destination.path) else { throw NoteError(message: "A script with this ID already exists. No content was overwritten.") }
+            var note = try JSONDecoder().decode(ScriptNote.self, from: Data(contentsOf: archived))
+            note.revision += 1; note.updatedAt = Self.timestamp()
+            try write(note, to: destination)
+            try manager.removeItem(at: archived)
+            return note
+        }
+    }
     func create(title: String, content: String) throws -> ScriptNote {
         let title = try validatedTitle(title); try validateContent(content)
         return try locked {

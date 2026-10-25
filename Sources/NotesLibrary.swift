@@ -30,10 +30,13 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
     let newButton = NSButton(title: "", target: nil, action: nil)
     let importButton = NSButton(title: "", target: nil, action: nil)
     let mcpButton = NSButton(title: "", target: nil, action: nil)
+    let undoDeleteButton = NSButton(title: "", target: nil, action: nil)
     var notes: [ScriptNote] = []
     let store: NoteStore
     var onSelect: ((ScriptNote) -> Void)?
     var onEdited: ((ScriptNote) -> Void)?
+    var canDelete: ((ScriptNote) -> Bool)?
+    var onDeleted: ((String) -> Void)?
     var editorNote: ScriptNote?
     var hasPendingEdits = false
     var lastEditTime: Double = 0
@@ -115,8 +118,11 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
             editorCard.heightAnchor.constraint(equalTo: listCard.heightAnchor)
         ])
         message.font = .systemFont(ofSize: 11); message.textColor = SetupTheme.muted
-        message.preferredMaxLayoutWidth = 844; root.addArrangedSubview(message)
-        message.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        message.preferredMaxLayoutWidth = 650
+        undoDeleteButton.target = self; undoDeleteButton.action = #selector(undoDelete)
+        SetupTheme.button(undoDeleteButton)
+        let footer = SetupTheme.stack([message, NSView(), undoDeleteButton], spacing: 12)
+        root.addArrangedSubview(footer); footer.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
         applyLanguage(); refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self, self.panel.isVisible else { return }; self.refresh()
@@ -127,9 +133,18 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
         let text = NSTextField(labelWithString: notes[row].title)
         text.font = .systemFont(ofSize: 13, weight: .medium); text.lineBreakMode = .byTruncatingTail
         let cell = NSView(); text.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(text)
+        let delete = NSButton(title: "×", target: self, action: #selector(deleteScript(_:)))
+        delete.identifier = NSUserInterfaceItemIdentifier(notes[row].id)
+        delete.isBordered = false; delete.font = .systemFont(ofSize: 19)
+        delete.contentTintColor = SetupTheme.muted
+        delete.toolTip = L("Delete script"); delete.setAccessibilityLabel(L("Delete script: %@", notes[row].title))
+        delete.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(delete)
         NSLayoutConstraint.activate([
             text.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-            text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            text.trailingAnchor.constraint(equalTo: delete.leadingAnchor, constant: -4),
+            delete.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+            delete.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            delete.widthAnchor.constraint(equalToConstant: 24), delete.heightAnchor.constraint(equalToConstant: 28),
             text.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             text.heightAnchor.constraint(equalToConstant: 24)
         ])
@@ -152,6 +167,7 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
     }
     func refresh(select id: String? = nil) {
         do {
+            undoDeleteButton.isHidden = try store.deletedNotes().isEmpty
             // Never replace a focused editor with a timer refresh or an MCP update.
             let editing = titleField.currentEditor() != nil || panel.firstResponder === editor
             guard id != nil || (!editing && !hasPendingEdits) else { return }
@@ -166,10 +182,35 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
                 table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false); loadEditor(first)
             } else {
                 editorNote = nil; editor.string = ""; titleField.stringValue = ""
+                hasPendingEdits = false
                 editor.isEditable = false; titleField.isEnabled = false
             }
             reloading = false
         } catch { reloading = false; showError(error) }
+    }
+    @objc private func deleteScript(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue, saveEditor(),
+              let note = notes.first(where: { $0.id == id }) else { return }
+        guard canDelete?(note) ?? true else {
+            showMessage("Stop recording or scrolling before deleting the current teleprompter script."); return
+        }
+        panel.makeFirstResponder(table)
+        do {
+            try store.delete(id: id, expectedRevision: note.revision)
+            if editorNote?.id == id { editorNote = nil }
+            refresh(select: editorNote?.id)
+            onDeleted?(id)
+            showMessage("Script deleted. Use Undo deletion to restore it.")
+        } catch { showError(error) }
+    }
+    @objc private func undoDelete() {
+        guard saveEditor() else { return }
+        do {
+            guard let deleted = try store.deletedNotes().first else { return }
+            let note = try store.restoreDeleted(deleted.id)
+            refresh(select: note.id); onSelect?(note)
+            showMessage("Script restored.")
+        } catch { showError(error) }
     }
     @discardableResult private func saveEditor() -> Bool {
         guard let note = editorNote else { return true }
@@ -206,6 +247,7 @@ final class NotesLibraryPanel: NSObject, NSTableViewDataSource, NSTableViewDeleg
         panel.title = L("Script library"); heading.stringValue = L("Script library")
         subtitle.stringValue = L("Write, paste or import. Keep your next take ready.")
         newButton.title = L("New script"); importButton.title = L("Import from file"); mcpButton.title = L("Import via MCP")
+        undoDeleteButton.title = L("Undo deletion")
         libraryCaption.stringValue = L("Your scripts"); titleField.placeholderString = L("Script title")
         editorHint.stringValue = L("Paste or type your script here. Changes save automatically.")
         showMessage("TXT / Markdown supported. You can also drop files into this window.")
@@ -259,7 +301,7 @@ final class NotesCoordinator {
     let store: NoteStore
     let prompter: Prompter
     let library: NotesLibraryPanel
-    var activeNote: ScriptNote
+    var activeNote: ScriptNote?
     var canOpen: () -> Bool
     var timer: Timer?
     var onMessage: ((String) -> Void)?
@@ -277,18 +319,41 @@ final class NotesCoordinator {
             }
             defaults.set(true, forKey: "notes.legacyMigrationCompleted"); notes = try store.list()
         }
-        if notes.isEmpty { notes = [try store.create(title: L("My first script"), content: prompter.text.string)] }
+        if notes.isEmpty, try store.deletedNotes().isEmpty { notes = [try store.create(title: L("My first script"), content: prompter.text.string)] }
         let selectedId = defaults.string(forKey: "notes.activeId")
-        activeNote = notes.first(where: { $0.id == selectedId }) ?? notes[0]
-        if defaults.bool(forKey: "notes.hasUnsavedDraft"), let backup = defaults.string(forKey: "prompter.script"), backup != activeNote.content {
-            activeNote = try store.create(title: String((activeNote.title + " (recovered copy)").prefix(200)), content: backup)
+        var initialNote = notes.first(where: { $0.id == selectedId }) ?? notes.first
+        if defaults.bool(forKey: "notes.hasUnsavedDraft"), let backup = defaults.string(forKey: "prompter.script"), !backup.isEmpty, backup != initialNote?.content {
+            initialNote = try store.create(title: String(((initialNote?.title ?? L("Untitled script")) + " (recovered copy)").prefix(200)), content: backup)
         }
+        activeNote = initialNote
         defaults.set(false, forKey: "notes.hasUnsavedDraft")
         library = NotesLibraryPanel(store: store)
-        display(activeNote, show: false)
+        if let initialNote { display(initialNote, show: false) }
+        else {
+            prompter.text.string = ""; prompter.scriptTitle = ""
+            defaults.removeObject(forKey: "notes.activeId"); defaults.set("", forKey: "prompter.script")
+        }
         prompter.onScriptEdited = { [weak self] content in self?.saveEdit(content) }
         library.onSelect = { [weak self] note in self?.useLibraryNote(note) }
         library.onEdited = { [weak self] note in self?.useLibraryNote(note) }
+        library.canDelete = { [weak self] note in
+            guard let self else { return false }
+            if self.activeNote?.id != note.id { return true }
+            return self.canOpen() && !self.prompter.running && !self.hasUnsavedDraft &&
+                ProcessInfo.processInfo.systemUptime - self.prompter.lastEditTime > 1
+        }
+        library.onDeleted = { [weak self] id in
+            guard let self, self.activeNote?.id == id else { return }
+            if let next = self.library.editorNote { self.display(next, show: false) }
+            else {
+                self.activeNote = nil; self.hasUnsavedDraft = false
+                self.prompter.running = false; self.prompter.play.title = L("▶ Start scrolling")
+                self.prompter.text.string = ""; self.prompter.scriptTitle = ""
+                self.prompter.resetPosition(); self.prompter.applyLanguage()
+                UserDefaults.standard.removeObject(forKey: "notes.activeId")
+                UserDefaults.standard.set("", forKey: "prompter.script")
+            }
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.processPendingRequests() }
     }
     private func display(_ note: ScriptNote, show: Bool) {
@@ -301,13 +366,26 @@ final class NotesCoordinator {
         if show { prompter.show() }
     }
     private func saveEdit(_ content: String) {
+        guard let note = activeNote else {
+            do {
+                let created = try store.create(title: L("Untitled script"), content: content)
+                activeNote = created; hasUnsavedDraft = false
+                UserDefaults.standard.set(created.id, forKey: "notes.activeId")
+                UserDefaults.standard.set(false, forKey: "notes.hasUnsavedDraft")
+                prompter.scriptTitle = created.title; prompter.applyLanguage()
+                library.refresh(select: created.id)
+            } catch {
+                hasUnsavedDraft = true; UserDefaults.standard.set(true, forKey: "notes.hasUnsavedDraft"); onMessage?(error.localizedDescription)
+            }
+            return
+        }
         do {
-            activeNote = try store.update(id: activeNote.id, content: content, expectedRevision: activeNote.revision)
+            activeNote = try store.update(id: note.id, content: content, expectedRevision: note.revision)
             hasUnsavedDraft = false; UserDefaults.standard.set(false, forKey: "notes.hasUnsavedDraft")
         } catch {
             // Preserve a local copy on revision conflicts; never overwrite the remote update.
-            if let latest = try? store.get(activeNote.id), latest.revision != activeNote.revision,
-               let recovered = try? store.create(title: String((activeNote.title + " (local copy)").prefix(200)), content: content) {
+            if let latest = try? store.get(note.id), latest.revision != note.revision,
+               let recovered = try? store.create(title: String((note.title + " (local copy)").prefix(200)), content: content) {
                 activeNote = recovered; hasUnsavedDraft = false; prompter.scriptTitle = recovered.title
                 UserDefaults.standard.set(recovered.id, forKey: "notes.activeId")
                 prompter.applyLanguage(); onMessage?("Another editor changed this script. Your edits were saved as a separate local copy.")

@@ -39,6 +39,25 @@ struct NoteStoreTests {
         try check(try store.openStatus(request.id).status == "opened", "Open acknowledgment should persist")
         let renamed = try store.update(id: imported.id, title: "Renamed", expectedRevision: imported.revision)
         try check(renamed.content == imported.content && renamed.revision == 2, "Renaming should retain script content")
+        do {
+            try store.delete(id: renamed.id, expectedRevision: 1)
+            throw NoteError(message: "A stale deletion was accepted")
+        } catch let error as NoteError {
+            try check(error.message == "This script changed elsewhere. Reload it before deleting.", "Deletion must check the displayed revision")
+        }
+        try store.delete(id: renamed.id, expectedRevision: renamed.revision)
+        try check(try !store.list().contains(where: { $0.id == renamed.id }), "Deleted scripts must leave the library")
+        try check(try store.deletedNotes().first?.content == renamed.content, "Deletion must retain a recovery copy")
+        let reopened = try NoteStore(directory: store.directory)
+        let restored = try reopened.restoreDeleted(renamed.id)
+        try check(restored.id == renamed.id && restored.title == renamed.title && restored.content == renamed.content, "Undo must preserve identity and complete content")
+        try check(restored.revision == renamed.revision + 1, "Undo must invalidate old editor revisions")
+        try check(try reopened.deletedNotes().isEmpty, "Restored scripts must leave the deleted list")
+        try reopened.delete(id: unicode.id, expectedRevision: unicode.revision)
+        try reopened.delete(id: restored.id, expectedRevision: restored.revision)
+        for deleted in try reopened.deletedNotes() { _ = try reopened.restoreDeleted(deleted.id) }
+        try check(try reopened.list().count == 2, "Multiple deletions must be recoverable")
         print("PASS: TXT/Markdown and UTF-16 import, invalid/oversized files, persistent open queue and acknowledgments, title updates")
+        print("PASS: revision-safe deletion, persistent recovery, undo, stale-editor protection and multiple deletions")
     }
 }

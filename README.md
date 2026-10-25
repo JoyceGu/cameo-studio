@@ -13,7 +13,7 @@ A native macOS recorder that combines your screen, camera and microphone into on
 - Record a display, an individual window, or a freely selected rectangular region, including browser and desktop apps.
 - Open a floating recording control panel for pointer emphasis, drawing and 1×–3× zoom around the cursor; optionally enable global zoom/pen shortcuts.
 - Composite your camera into the recording as a circle or rounded rectangle; adjust size, position and mirroring.
-- Organize multiple scripts in a local library; import or drag in TXT/Markdown files.
+- Organize multiple scripts in a local library; import or drag in TXT/Markdown files. Delete a script with the × button beside its title, or restore it with **Undo deletion**. Deleted scripts are retained locally for recovery, including after restarting the app.
 - Let a local MCP-capable AI client create, update and open scripts without interrupting a recording. See [MCP setup](Docs/MCP.md).
 - Read an editable, scrolling teleprompter with adjustable text size and speed. Pause scrolling or return to the top; scripts save locally.
 - Keep the recorder controls, teleprompter and camera preview out of screen capture; the camera is added separately to the exported video.

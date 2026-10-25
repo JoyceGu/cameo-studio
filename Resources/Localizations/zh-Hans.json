@@ -233,5 +233,14 @@
   "Allow screen recording for this TD Capture build in System Settings, then quit and reopen the app. Your previous source is unchanged.": "请在系统设置中允许当前版本的 TD Capture 录屏，然后退出并重新打开。保留原来的录制来源。",
   "Screen recording permission is unavailable for this build": "当前版本的屏幕录制权限尚未生效",
   "TD Capture needs Screen & System Audio Recording permission to record a display or region and exclude its controls. Allow the current app in System Settings, then quit and reopen it. If an enabled entry belongs to an older local build, remove it and add this current app. Your previous source is unchanged.": "录制整屏或区域并排除控制窗口，需要屏幕与系统音频录制权限。请在系统设置中允许当前应用，再退出并重新打开。如果已开启的条目属于旧版本，请移除旧条目并添加当前应用。保留原来的录制来源。",
-  "Recording region guide": "录制区域提示"
+  "Recording region guide": "录制区域提示",
+  "Delete script": "删除讲稿",
+  "Delete script: %@": "删除讲稿：%@",
+  "Undo deletion": "撤销删除",
+  "Stop recording or scrolling before deleting the current teleprompter script.": "请先结束录制或暂停滚动，再删除当前提词器讲稿。",
+  "Script deleted. Use Undo deletion to restore it.": "讲稿已删除，可点击“撤销删除”恢复。",
+  "Script restored.": "讲稿已恢复。",
+  "This script changed elsewhere. Reload it before deleting.": "讲稿已被其他客户端修改，请刷新后再删除。",
+  "The deleted script was not found.": "找不到已删除的讲稿。",
+  "A script with this ID already exists. No content was overwritten.": "此讲稿已存在，没有覆盖任何内容。"
 }

@@ -2,6 +2,8 @@
 
 ## 0.5.0
 
+Build 8 refresh: add a × button beside each script, persistent recoverable deletion and Undo deletion. Preserve active scripts while recording or scrolling and prevent stale clients from overwriting restored notes.
+
 - Add free rectangular region recording with a normal-brightness selection and dimmed surroundings, without a colored border.
 - Reuse effective screen recording permission for display and region selection; validate the actual capture filter and crop before accepting a source.
 - Keep region guides, recorder controls and teleprompter out of captured video.
