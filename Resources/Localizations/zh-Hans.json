@@ -221,5 +221,17 @@
   "Enable keyboard shortcuts": "启用快捷键",
   "Keyboard shortcuts": "快捷键",
   "⌘⌥ =     Magnify to 3×\n⌘⌥ − / 0   Return to 1×\n⌘⌥ P     Toggle pen on / off\n⌘⌥ K     Clear all drawing": "⌘⌥ ＝     放大至 3×\n⌘⌥ − / 0   还原至 1×\n⌘⌥ P     开启 / 关闭画笔\n⌘⌥ K     清除全部笔迹",
-  "Drawing cleared. The current pen mode is unchanged.": "笔迹已清除，画笔开关状态保持不变。"
+  "Drawing cleared. The current pen mode is unchanged.": "笔迹已清除，画笔开关状态保持不变。",
+  "Choose a region…": "选择区域…",
+  "Drag to select a recording area · Esc to cancel": "拖动框选录制区域 · Esc 取消",
+  "Release to select · %d × %d pt · Esc to cancel": "松开确认 · %d × %d 点 · Esc 取消",
+  "Region · %d × %d pt": "区域 · %d × %d 点",
+  "Select recording region": "框选录制区域",
+  "Region selected. Confirm sharing this same display in the system picker.": "区域已选定，请在系统选择器中确认共享同一块屏幕。",
+  "The shared display differs from the selected region. Choose the region again and share the same display.": "共享的屏幕与框选区域不一致。请重新框选，并共享同一块屏幕。",
+  "Display %d · %@": "屏幕 %d · %@",
+  "Allow screen recording for this TD Capture build in System Settings, then quit and reopen the app. Your previous source is unchanged.": "请在系统设置中允许当前版本的 TD Capture 录屏，然后退出并重新打开。保留原来的录制来源。",
+  "Screen recording permission is unavailable for this build": "当前版本的屏幕录制权限尚未生效",
+  "TD Capture needs Screen & System Audio Recording permission to record a display or region and exclude its controls. Allow the current app in System Settings, then quit and reopen it. If an enabled entry belongs to an older local build, remove it and add this current app. Your previous source is unchanged.": "录制整屏或区域并排除控制窗口，需要屏幕与系统音频录制权限。请在系统设置中允许当前应用，再退出并重新打开。如果已开启的条目属于旧版本，请移除旧条目并添加当前应用。保留原来的录制来源。",
+  "Recording region guide": "录制区域提示"
 }

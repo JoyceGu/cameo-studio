@@ -14,7 +14,15 @@ cp "$ROOT/Assets/TDCapture.icns" "$STAGE/Contents/Resources/TDCapture.icns"
 cp "$ROOT/Assets/Backgrounds/"*.png "$STAGE/Contents/Resources/"
 cp -R "$ROOT/Resources/Localizations" "$STAGE/Contents/Resources/Localizations"
 cp "$ROOT/Info.plist" "$STAGE/Contents/Info.plist"
-codesign --force --sign - --identifier local.joyce.CameoStudio "$STAGE"
+SIGN_IDENTITY="${TD_CAPTURE_SIGNING_IDENTITY:-}"
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk '/"Developer ID Application:|"Apple Development:/ {print $2; exit}' || true)
+fi
+if [[ -z "$SIGN_IDENTITY" ]]; then
+  SIGN_IDENTITY="-"
+  echo "No signing certificate found; ad-hoc builds may require renewed privacy permissions after each update."
+fi
+codesign --force --sign "$SIGN_IDENTITY" --identifier local.joyce.CameoStudio "$STAGE"
 codesign --verify --deep --strict "$STAGE"
 if /usr/bin/pgrep -x TDCapture >/dev/null 2>&1 || /usr/bin/pgrep -x CameoStudio >/dev/null 2>&1; then
   echo "Please quit TD Capture before installing the new build."

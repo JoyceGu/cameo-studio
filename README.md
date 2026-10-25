@@ -10,7 +10,7 @@ A native macOS recorder that combines your screen, camera and microphone into on
 
 ## Features
 
-- Record a display or an individual window, including browser and desktop apps.
+- Record a display, an individual window, or a freely selected rectangular region, including browser and desktop apps.
 - Open a floating recording control panel for pointer emphasis, drawing and 1×–3× zoom around the cursor; optionally enable global zoom/pen shortcuts.
 - Composite your camera into the recording as a circle or rounded rectangle; adjust size, position and mirroring.
 - Organize multiple scripts in a local library; import or drag in TXT/Markdown files.
@@ -42,7 +42,8 @@ The script uses system Swift and frameworks only; there are no third-party depen
 
 ## Record a video
 
-1. Click **Choose a window…** and use the macOS window picker. For a full display, click **Record an entire screen…** and confirm the screen in the macOS system picker.
+1. Click **Choose a window…** and use the macOS window picker. For a full display, click **Record an entire screen…**. If multiple displays are connected, select one from the app menu.
+   For a cropped recording, click **Choose a region…**, drag a rectangle and release to select it. With effective screen recording permission, the selection is accepted directly without presenting the system sharing picker. Press **Esc** to cancel without changing the previous source. Regions must be at least 32 × 32 points and stay within one display. Camera placement, drawing and pointer zoom use the selected region as their coordinate space. After confirmation, the active region stays at normal brightness while its surroundings are dimmed, with no colored border. The guide passes mouse clicks through and is excluded from capture with the rest of the app. Choosing a window or full display removes it; cancelling a new selection restores the previous guide.
 2. Choose your camera and microphone. Open the camera preview and allow camera access.
 3. Set camera shape, position, size and mirroring. Use **Background…** to choose blur or a preset image.
 4. Open the teleprompter, paste your script and adjust scrolling. Scrolling is controlled separately from recording.
@@ -61,7 +62,7 @@ Open **Recording controls…** at the top of the setup screen. Feature checkboxe
 
 Global shortcuts are enabled by default (and remember your choice). Use **⌘⌥ =** (jump to 3×), **⌘⌥ −** (return to 1×), **⌘⌥ 0** (reset), **⌘⌥ P** (toggle pen on/off), and **⌘⌥ K** (clear all drawing without changing pen mode). Zoom is limited to 1×–3× and applies to the exported recording; it does not magnify the live desktop. The camera overlay remains fixed. A floating badge shows the magnified state; returning to 1× shows a short confirmation. Pen mode adds a purple border, a faint tint, and a visible mode badge; drag inside the selected source to draw. Controls and the live annotation canvas are excluded from full-display capture; ink is composited separately. A selected single-window recording captures that window only.
 
-Both window and whole-display selection use the macOS system picker. After display selection, TD Capture excludes its own windows and validates one real frame before accepting the source; the validation image is discarded. Selection failures show the actual error and preserve the previous source instead of repeatedly claiming the Settings permission toggle is off. macOS may still require an explicit sharing confirmation for the chosen source. Excluding recorder windows uses a separate filter and requires effective Screen & System Audio Recording permission; a picker grant alone is insufficient. If that stage returns `-3801` despite an enabled Settings switch after a local rebuild, remove the old TD Capture entry, add the current app, and relaunch if macOS requests it. The app checks the original picker filter first and reports which stage failed. Window-relative pointer and pen placement uses window metadata available on macOS 15.2 and later.
+Window selection uses the macOS system picker. Display and region selection use the existing Screen & System Audio Recording grant directly, exclude the app's own windows, and validate a real frame with the same crop before accepting the source. No screenshot from validation is saved. Permission failures preserve the previous source. After changing signing identity, allow the current build in System Settings and relaunch; an enabled entry for an older ad-hoc build may need replacement. The build script uses an available Apple Development or Developer ID Application identity (or `TD_CAPTURE_SIGNING_IDENTITY`) to keep the signing identity stable across rebuilds; without a certificate it warns and falls back to ad-hoc signing. Window-relative pointer and pen placement uses window metadata available on macOS 15.2 and later.
 
 ## Current limits
 

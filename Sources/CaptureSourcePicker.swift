@@ -7,6 +7,7 @@ struct CaptureTarget {
     let frame: CGRect // Quartz global coordinates: origin at the main display's top left.
     let windowID: CGWindowID?
     let displayID: CGDirectDisplayID?
+    var sourceRect: CGRect? = nil // Display-local points, measured from the top left.
 
     var supportsPointerCoordinates: Bool { windowID != nil || displayID != nil }
 
@@ -23,6 +24,10 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
     var onSelect: ((CaptureTarget) -> Void)?
     var onMessage: ((String) -> Void)?
     private var selectionGeneration = 0
+    private var requestedScreenAccess = false
+    private var awaitingPicker = false
+    private var regionSelector: CaptureRegionSelector?
+    private let regionGuide = CaptureRegionGuide()
     override init() {
         super.init()
         let picker = SCContentSharingPicker.shared
@@ -30,6 +35,7 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
     }
     private func present(mode: SCContentSharingPickerMode, style: SCShareableContentStyle) {
         selectionGeneration += 1
+        regionSelector?.cancel(); regionSelector = nil
         let picker = SCContentSharingPicker.shared
         var configuration = SCContentSharingPickerConfiguration()
         configuration.allowedPickerModes = mode
@@ -37,18 +43,101 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
         configuration.allowsChangingSelectedContent = false
         picker.defaultConfiguration = configuration
         picker.isActive = true
+        awaitingPicker = true
         picker.present(using: style)
     }
     func chooseWindow() { present(mode: .singleWindow, style: .window) }
-    func chooseScreen() { present(mode: .singleDisplay, style: .display) }
+    func chooseScreen() {
+        if NSScreen.screens.count == 1, let screen = NSScreen.screens.first,
+           let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value {
+            prepareDisplay(id: id); return
+        }
+        let menu = NSMenu()
+        for (index, screen) in NSScreen.screens.enumerated() {
+            guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { continue }
+            let item = NSMenuItem(title: L("Display %d · %@", index + 1, screen.localizedName), action: #selector(selectDisplay(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = id; menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+    @objc private func selectDisplay(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? NSNumber else { return }
+        prepareDisplay(id: id.uint32Value)
+    }
+    private func prepareDisplay(id: CGDirectDisplayID, crop: CGRect? = nil) {
+        selectionGeneration += 1; awaitingPicker = false
+        let generation = selectionGeneration
+        if !CGPreflightScreenCaptureAccess() {
+            if !requestedScreenAccess {
+                requestedScreenAccess = true
+                _ = CGRequestScreenCaptureAccess()
+            }
+            guard CGPreflightScreenCaptureAccess() else {
+                regionGuide.restore()
+                onMessage?("Allow screen recording for this TD Capture build in System Settings, then quit and reopen the app. Your previous source is unchanged.")
+                showScreenPermissionRecovery(); return
+            }
+        }
+        onMessage?("Checking the selected screen…")
+        Task { @MainActor in
+            do {
+                let content = try await SCShareableContent.currentProcess
+                guard let display = content.displays.first(where: { $0.displayID == id }) else {
+                    throw NSError(domain: "TDCapture.Source", code: 1, userInfo: [NSLocalizedDescriptionKey: L("Cannot identify the selected screen. Please choose it again.")])
+                }
+                let own = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
+                guard !own.isEmpty else {
+                    throw NSError(domain: "TDCapture.Source", code: 2, userInfo: [NSLocalizedDescriptionKey: L("Cannot exclude recorder controls from the selected screen. Please reopen TD Capture and choose the screen again.")])
+                }
+                let filter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
+                let rect = crop ?? CGRect(origin: .zero, size: display.frame.size)
+                let configuration = SCStreamConfiguration()
+                configuration.width = 320; configuration.height = max(2, Int(320 * rect.height / max(1, rect.width)))
+                configuration.showsCursor = false; configuration.capturesAudio = false
+                if let crop { configuration.sourceRect = crop }
+                // Validate the same filter and crop that recording will use.
+                _ = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+                guard generation == self.selectionGeneration else { return }
+                let title = crop == nil ? L("Screen · %d × %d", display.width, display.height) : L("Region · %d × %d pt", Int(rect.width), Int(rect.height))
+                let target = CaptureTarget(filter: filter, title: title, frame: rect.offsetBy(dx: display.frame.minX, dy: display.frame.minY), windowID: nil, displayID: id, sourceRect: crop)
+                self.regionGuide.setTarget(target)
+                self.onSelect?(target)
+            } catch {
+                guard generation == self.selectionGeneration else { return }
+                if (error as NSError).code == -3801 { self.showScreenPermissionRecovery() }
+                self.report(error)
+                self.regionGuide.restore()
+            }
+        }
+    }
+    func chooseRegion() {
+        selectionGeneration += 1
+        awaitingPicker = false
+        regionSelector?.cancel()
+        regionGuide.hide()
+        let generation = selectionGeneration
+        let selector = CaptureRegionSelector(); regionSelector = selector
+        selector.select(completion: { [weak self] displayID, crop in
+            guard let self, generation == self.selectionGeneration else { return }
+            self.regionSelector = nil
+            self.prepareDisplay(id: displayID, crop: crop)
+        }, onCancel: { [weak self] in
+            guard let self, generation == self.selectionGeneration else { return }
+            self.regionSelector = nil
+            self.regionGuide.restore()
+            self.onMessage?("Source selection cancelled. Your previous source is unchanged.")
+        })
+    }
     func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
         DispatchQueue.main.async {
+            guard self.awaitingPicker else { return }
+            self.awaitingPicker = false
             self.selectionGeneration += 1
             self.onMessage?("Source selection cancelled. Your previous source is unchanged.")
         }
     }
     func contentSharingPickerStartDidFailWithError(_ error: Error) {
-        DispatchQueue.main.async { self.report(error) }
+        DispatchQueue.main.async { self.awaitingPicker = false; self.report(error) }
     }
     private func report(_ error: Error) {
         let detail = error as NSError
@@ -56,58 +145,9 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
     }
     func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
         DispatchQueue.main.async {
-            let generation = self.selectionGeneration
-            if filter.style == .display {
-                self.onMessage?("Checking the selected screen…")
-                Task { @MainActor in
-                    var stage = "Read the system-selected screen"
-                    do {
-                        // Keep the picker's consent-bearing filter intact for the first
-                        // check. A newly constructed filter does not inherit that consent.
-                        let configuration = SCStreamConfiguration()
-                        configuration.width = 320
-                        configuration.height = max(2, Int(320 * filter.contentRect.height / max(1, filter.contentRect.width)))
-                        configuration.showsCursor = false; configuration.capturesAudio = false
-                        _ = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-                        stage = "Read recorder window metadata"
-                        // This redacted API exposes our own process without requesting
-                        // broad screen access. Keep our UI excluded from full-display video.
-                        let ownContent = try await SCShareableContent.currentProcess
-                        let display: SCDisplay
-                        if #available(macOS 15.2, *), let selected = filter.includedDisplays.first {
-                            display = selected
-                        } else {
-                            let exact = ownContent.displays.filter { $0.frame == filter.contentRect }
-                            let sameSize = ownContent.displays.filter { $0.frame.size == filter.contentRect.size }
-                            guard let selected = exact.first ?? (sameSize.count == 1 ? sameSize.first : nil) else {
-                                throw NSError(domain: "TDCapture.Source", code: 1, userInfo: [NSLocalizedDescriptionKey: L("Cannot identify the selected screen. Please choose it again.")])
-                            }
-                            display = selected
-                        }
-                        let own = ownContent.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
-                        guard !own.isEmpty else {
-                            throw NSError(domain: "TDCapture.Source", code: 2, userInfo: [NSLocalizedDescriptionKey: L("Cannot exclude recorder controls from the selected screen. Please reopen TD Capture and choose the screen again.")])
-                        }
-                        // Excluding our UI requires a separate filter and broad screen
-                        // recording permission, even after a successful picker selection.
-                        stage = "Exclude recorder controls and teleprompter"
-                        let captureFilter = SCContentFilter(display: display, excludingApplications: own, exceptingWindows: [])
-                        // Validate a real frame instead of treating a Settings toggle as
-                        // proof of access. The frame is discarded, never saved or uploaded.
-                        _ = try await SCScreenshotManager.captureImage(contentFilter: captureFilter, configuration: configuration)
-                        guard generation == self.selectionGeneration else { return }
-                        let title = L("Screen · %d × %d", display.width, display.height)
-                        self.onSelect?(CaptureTarget(filter: captureFilter, title: title, frame: display.frame, windowID: nil, displayID: display.displayID))
-                    } catch {
-                        guard generation == self.selectionGeneration else { return }
-                        let detail = error as NSError
-                        if stage == "Exclude recorder controls and teleprompter", detail.code == -3801 {
-                            self.showScreenPermissionRecovery()
-                        }
-                        self.onMessage?(L("Screen check failed at %@ (%@ %d): %@. Your previous source is unchanged.", L(stage), detail.domain, detail.code, detail.localizedDescription))
-                    }
-                }
-            } else {
+            guard self.awaitingPicker else { return }
+            self.awaitingPicker = false
+            if filter.style == .window {
                 var frame = filter.contentRect
                 var title = L("Selected window")
                 var id: CGWindowID?
@@ -115,14 +155,15 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
                     frame = window.frame; id = window.windowID
                     title = (window.owningApplication?.applicationName ?? "") + " · " + (window.title ?? L("Selected window"))
                 }
+                self.regionGuide.setTarget(nil)
                 self.onSelect?(CaptureTarget(filter: filter, title: title, frame: frame, windowID: id, displayID: nil))
             }
         }
     }
     private func showScreenPermissionRecovery() {
         let alert = NSAlert()
-        alert.messageText = L("Screen selected, but recorder exclusion was denied")
-        alert.informativeText = L("macOS allowed the selected screen, but denied the separate access needed to keep recorder controls and your script out of the video. A Settings switch can refer to an older local build. In Screen & System Audio Recording, remove the TD Capture entry with −, add this current app with +, and reopen it if macOS asks. Your previous source is unchanged.")
+        alert.messageText = L("Screen recording permission is unavailable for this build")
+        alert.informativeText = L("TD Capture needs Screen & System Audio Recording permission to record a display or region and exclude its controls. Allow the current app in System Settings, then quit and reopen it. If an enabled entry belongs to an older local build, remove it and add this current app. Your previous source is unchanged.")
         alert.addButton(withTitle: L("Open System Settings"))
         alert.addButton(withTitle: L("Cancel"))
         if alert.runModal() == .alertFirstButtonReturn,
@@ -130,5 +171,5 @@ final class CaptureSourcePicker: NSObject, SCContentSharingPickerObserver {
             NSWorkspace.shared.open(url)
         }
     }
-    func close() { selectionGeneration += 1; SCContentSharingPicker.shared.remove(self); SCContentSharingPicker.shared.isActive = false }
+    func close() { selectionGeneration += 1; regionSelector?.cancel(); regionSelector = nil; regionGuide.close(); SCContentSharingPicker.shared.remove(self); SCContentSharingPicker.shared.isActive = false }
 }

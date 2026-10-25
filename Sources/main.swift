@@ -143,12 +143,13 @@ final class Recorder: NSObject, @unchecked Sendable, SCStreamOutput, SCStreamDel
         epoch = nil; lastVideo = nil; screenFrame = nil; videoCount = 0; audioCount = 0; reportedFailure = false; accepting = true
     }
 
-    func start(filter: SCContentFilter, width: Int, height: Int, microphoneID: String?, url: URL) async throws {
+    func start(filter: SCContentFilter, width: Int, height: Int, microphoneID: String?, url: URL, sourceRect: CGRect? = nil) async throws {
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             queue.async { do { try self.prepare(url: url, width: width, height: height, microphone: microphoneID != nil); c.resume() } catch { c.resume(throwing: error) } }
         }
         let config = SCStreamConfiguration()
         config.width = width; config.height = height
+        if let sourceRect { config.sourceRect = sourceRect }
         config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         config.queueDepth = 5; config.showsCursor = true
         config.ignoreShadowsSingleWindow = true
@@ -318,11 +319,19 @@ final class Prompter: NSObject, NSTextViewDelegate {
         text.delegate = self
         let savedSize = UserDefaults.standard.double(forKey: "prompter.fontSize")
         if savedSize >= 20 { fontSize.doubleValue = savedSize }
-        text.font = .systemFont(ofSize: fontSize.doubleValue, weight: .medium); text.textColor = .white; text.backgroundColor = NSColor(white: 0.08, alpha: 1)
+        let readingBackground = NSColor(white: 0.08, alpha: 1)
+        text.font = .systemFont(ofSize: fontSize.doubleValue, weight: .medium); text.textColor = .white; text.backgroundColor = readingBackground
+        text.drawsBackground = true
         text.textContainerInset = NSSize(width: 20, height: 24)
         text.isVerticallyResizable = true; text.isHorizontallyResizable = false
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
         scroll.documentView = text; scroll.hasVerticalScroller = true; scroll.drawsBackground = true
+        // Match all scroll surfaces so newly exposed strips stay dark.
+        // tick() also invalidates the visible text during fractional scrolling.
+        scroll.backgroundColor = readingBackground
+        scroll.contentView.backgroundColor = readingBackground
+        scroll.contentView.drawsBackground = true
+        scroll.wantsLayer = true
         root.addArrangedSubview(scroll)
         scroll.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -32).isActive = true
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
@@ -342,6 +351,8 @@ final class Prompter: NSObject, NSTextViewDelegate {
         let maxY = max(0, text.bounds.height - scroll.contentView.bounds.height)
         let y = min(maxY, scroll.contentView.bounds.minY + speed.doubleValue * dt)
         scroll.contentView.scroll(to: NSPoint(x: 0, y: y)); scroll.reflectScrolledClipView(scroll.contentView)
+        text.setNeedsDisplay(text.visibleRect)
+        scroll.contentView.needsDisplay = true
         if y >= maxY { running = false; play.title = L("▶ Start scrolling") }
     }
     func applyLanguage() {
@@ -382,6 +393,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     let start = SetupRecordButton(title: "● Start recording", target: nil, action: nil)
     let previewButton = NSButton(title: "Open camera preview", target: nil, action: nil)
     let refreshButton = NSButton(title: "Choose / refresh sources", target: nil, action: nil)
+    let regionButton = NSButton(title: "Choose a region…", target: nil, action: nil)
     let status = NSTextField(wrappingLabelWithString: "Choose a source, then open the camera preview. Everything stays on your Mac.")
     let clockLabel = NSTextField(labelWithString: "00:00")
     let cameraView = CameraView(frame: .zero)
@@ -487,7 +499,11 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         captureCard.content.addArrangedSubview(setupField("Source", source, width: 370))
         refreshButton.target = self; refreshButton.action = #selector(refreshSources)
         refreshButton.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil); refreshButton.imagePosition = .imageLeading
-        SetupTheme.button(refreshButton); captureCard.content.addArrangedSubview(refreshButton)
+        SetupTheme.button(refreshButton)
+        regionButton.target = self; regionButton.action = #selector(chooseRegion)
+        regionButton.image = NSImage(systemSymbolName: "crop", accessibilityDescription: nil); regionButton.imagePosition = .imageLeading
+        SetupTheme.button(regionButton)
+        captureCard.content.addArrangedSubview(SetupTheme.stack([refreshButton, regionButton], spacing: 8))
         cameras = availableCameras(); microphones = availableMicrophones()
         camera.addItems(withTitles: cameras.map(\.localizedName)); microphone.addItems(withTitles: ["No microphone"] + microphones.map(\.localizedName))
         if let defaultMic = AVCaptureDevice.default(for: .audio), let i = microphones.firstIndex(where: { $0.uniqueID == defaultMic.uniqueID }) { microphone.selectItem(at: i+1) }
@@ -608,6 +624,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         microphone.item(at: 0)?.title = L("No microphone")
         if selectedCapture == nil { source.title = L("Choose a window…") }
         refreshButton.title = L("Record an entire screen…")
+        regionButton.title = L("Choose a region…")
         controlButton?.title = L("Recording controls…"); controlPanel?.applyLanguage()
         settingsPanel?.title = L("Settings"); settingsLabel?.stringValue = L("Interface language")
         settingsNote?.stringValue = L("Changes apply immediately and are saved automatically.")
@@ -639,6 +656,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
     }
     @objc func chooseWindow() { guard !busy, !recording else { return }; sourcePicker.chooseWindow() }
     @objc func refreshSources() { guard !busy, !recording else { return }; sourcePicker.chooseScreen() }
+    @objc func chooseRegion() { guard !busy, !recording else { return }; sourcePicker.chooseRegion() }
     @objc func openControls() { controlPanel.show() }
     @objc func cameraChanged() {
         if cameraReady { recorder.stopCamera(); cameraReady = false; bubble.orderOut(nil); previewButton.title = L("Open camera preview") }
@@ -677,7 +695,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
         selectedLayout.round = shape.indexOfSelectedItem == 0; selectedLayout.mirror = mirror.state == .on
         selectedLayout.x = nil; selectedLayout.y = nil; recorder.updateLayout(selectedLayout)
         guard bubble != nil else { return }
-        let screen = targetScreen(); let frame = screen.frame
+        let frame = portraitPlacementFrame()
         let portrait = selectedLayout.cameraRect(in: frame.size)
         let side = portrait.width
         bubble.setFrame(portrait.offsetBy(dx: frame.minX, dy: frame.minY), display: true)
@@ -689,15 +707,23 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
            let screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }) { return screen }
         return bubble?.screen ?? NSScreen.main ?? NSScreen.screens[0]
     }
+    func portraitPlacementFrame() -> CGRect {
+        if let target = selectedCapture, target.sourceRect != nil {
+            let top = NSScreen.screens.first?.frame.maxY ?? 0
+            let frame = target.currentFrame
+            return CGRect(x: frame.minX, y: top - frame.maxY, width: frame.width, height: frame.height)
+        }
+        return targetScreen().frame
+    }
     @objc func bubbleMoved() {
         guard cameraReady else { return }
-        let frame = targetScreen().frame; let b = bubble.frame
+        let frame = portraitPlacementFrame(); let b = bubble.frame
         selectedLayout.x = max(0, min(1, (b.minX-frame.minX)/max(1, frame.width-b.width)))
         selectedLayout.y = max(0, min(1, (b.minY-frame.minY)/max(1, frame.height-b.height)))
         recorder.updateLayout(selectedLayout)
     }
     func lockControls(_ locked: Bool) {
-        [source, camera, microphone, previewButton, refreshButton].forEach { $0.isEnabled = !locked }
+        [source, camera, microphone, previewButton, refreshButton, regionButton].forEach { $0.isEnabled = !locked }
     }
     @objc func toggleRecording() {
         if recording { finishRecording(); return }
@@ -720,7 +746,7 @@ final class Studio: NSObject, @unchecked Sendable, NSApplicationDelegate, NSWind
                 outputURL = url
                 for n in (1...3).reversed() { showStatus("Recording starts in %d…", n); try await Task.sleep(nanoseconds: 1_000_000_000) }
                 controlPanel.startSession(target: target)
-                try await recorder.start(filter: filter, width: width, height: height, microphoneID: micID, url: url)
+                try await recorder.start(filter: filter, width: width, height: height, microphoneID: micID, url: url, sourceRect: target.sourceRect)
                 recording = true; busy = false; started = Date(); start.isEnabled = true; start.title = L("■ Stop & export")
                 showStatus("Recording · %d × %d · %@ · Script excluded", width, height, micID == nil ? "Microphone off" : "Microphone on")
                 ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self = self] _ in
