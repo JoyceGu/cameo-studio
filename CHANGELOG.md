@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Add free rectangular region recording with a normal-brightness selection and dimmed surroundings, without a colored border.
+- Reuse effective screen recording permission for display and region selection; validate the actual capture filter and crop before accepting a source.
+- Keep region guides, recorder controls and teleprompter out of captured video.
+- Add recording controls for pointer highlighting, pen annotations, clearing ink and cursor-centered 3× zoom with global shortcuts enabled by default.
+- Polish the watercolor setup screen and script library; show camera size as a percentage of the recording’s short edge and raise bottom-corner presets.
+- Fix white horizontal artifacts during teleprompter scrolling.
+- Prefer an available signing certificate for local builds to preserve identity across updates; the public ZIP remains ad hoc signed and not notarized.
+- Add geometry and rendering checks for region selection.
+
 ## 0.4.0
 
 - Add a persistent script library with multiple notes, title editing and legacy-script migration.
